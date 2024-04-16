@@ -4,7 +4,7 @@ this is where you'll find all of the get/post request handlers
 the socket event handlers are inside of socket_routes.py
 '''
 
-from flask import Flask, render_template, request, abort, url_for
+from flask import Flask, render_template, request, abort, url_for, jsonify
 from flask_socketio import SocketIO
 import db
 import secrets
@@ -34,7 +34,72 @@ def index():
 def login():    
     return render_template("login.jinja")
 
-# handles a post request when the user clicks the log in button
+@app.route('/friends')
+def friend_list():
+    username = request.args.get('username')
+    if not username:
+        return "Username is required", 400
+
+    user = db.get_user(username)
+    if not user:
+        return "User does not exist", 404
+
+    # Assuming get_friends function returns a dictionary containing the friend lists
+    friends_data = db.get_friends(username)
+    
+    # Render the friend list template with the data
+    return render_template('friend_list.jinja', 
+                           username=username,
+                           accepted_friends=friends_data['accepted_friends'], 
+                           pending_requests=friends_data['pending_requests'], 
+                           pending_friends=friends_data['pending_friends'])
+
+
+@app.route('/handle_friend_request', methods=['POST'])
+def handle_friend_request():
+    if not request.is_json:
+        return jsonify({'error': 'Invalid request format'}), 400
+
+    username = request.json.get('username')  # The user that is logged in
+    friend_username = request.json.get('friend_username')  # The friend username to approve/reject
+    is_accepted = request.json.get('is_accepted')  # Boolean, True if approving, False if rejecting
+
+    if not username or not friend_username or is_accepted is None:
+        return jsonify({'error': 'Missing data'}), 400
+
+    # Assuming db.handle_friend_request handles the logic for approving or rejecting
+    try:
+        result = db.handle_friend_request(username, friend_username, is_accepted)
+        if result:
+            return jsonify('Success')
+        else:
+            return jsonify({'error': 'Failed to update the friend request'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/add_friend', methods=['POST'])
+def add_friend():
+    if not request.is_json:
+        return jsonify({'error': 'Invalid request format'}), 400
+
+    username = request.json.get('username')
+    friend_username = request.json.get('friend_username')
+
+    if not username or not friend_username:
+        return jsonify({'error': 'Missing data'}), 400
+
+    # Call the function to add a friend request
+    try:
+        success, message = db.add_friend_request(username, friend_username)
+        if success:
+            return jsonify('Success')
+        else:
+            return jsonify({'error': message}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
 @app.route("/login/user", methods=["POST"])
 def login_user():
     if not request.is_json:
@@ -50,7 +115,9 @@ def login_user():
     if user.password != password:
         return "Error: Password does not match!"
 
-    return url_for('home', username=request.json.get("username"))
+    # Change the redirect here to point to the friend list route
+    return url_for('friend_list', username=username)
+
 
 # handles a get request to the signup page
 @app.route("/signup")

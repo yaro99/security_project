@@ -10,8 +10,8 @@ Prisma docs also looks so much better in comparison
 or use SQLite, if you're not into fancy ORMs (but be mindful of Injection attacks :) )
 '''
 
-from sqlalchemy import String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import String, Column, ForeignKey, Boolean
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Dict
 
 # data models
@@ -29,6 +29,20 @@ class User(Base):
     # in other words we've mapped the username Python object property to an SQL column of type String 
     username: Mapped[str] = mapped_column(String, primary_key=True)
     password: Mapped[str] = mapped_column(String)
+
+# model to store friends
+class Friend(Base):
+    __tablename__ = "friends"
+
+    # Requesting and receiving usernames are FKs linking to user table
+    requesting_username: Mapped[str] = mapped_column(String, ForeignKey("user.username"), primary_key=True)
+    receiving_username: Mapped[str] = mapped_column(String, ForeignKey("user.username"), primary_key=True)
+    
+    isAccepted: Mapped[bool] = mapped_column(Boolean)
+
+    # Define relationship to User model for easy access
+    requester = relationship("User", foreign_keys=[requesting_username])
+    receiver = relationship("User", foreign_keys=[receiving_username])
     
 
 # stateful counter used to generate the room id

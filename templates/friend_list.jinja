@@ -1,18 +1,108 @@
 {% extends 'base.jinja' %}
 
-{% block content %} 
+{% block content %}
+
+
+<!--Navbar, you'll see the username here-->
+<nav style="border-bottom: 1px solid black;">
+    <ol style="float: right">
+        <li style="display:inline-block">Username:  {{ username }} </li>
+    </ol>
+</nav>
+
+<h1>Messaging App </h1>
     <h1>Friend List</h1>
-    <ul>
-        {% if friend_requests %}
-            {% for request in friend_requests %}
-                <li id="{{ request.user1.username if request.user2.username == username else request.user2.username }}-request">
-                    {{ request.user1.username if request.user2.username == username else request.user2.username }}
-                    <button onclick="acceptRequest('{{ request.user1.username if request.user2.username == username else request.user2.username }}')">Accept</button>
-                    <button onclick="rejectRequest('{{ request.user1.username if request.user2.username == username else request.user2.username }}')">Reject</button>
+
+    <section>
+        <h2>Current Friends</h2>
+        <ul>
+            {% for friend in accepted_friends %}
+                <li>{{ friend.username }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    <section>
+        <h2>Friend Request Inbox</h2>
+        <ul>
+            {% for request in pending_requests %}
+                <li>
+                    {{ request.username }}
+                    <button onclick="handleFriendRequest('{{ username }}', '{{ request.username }}', true)">Approve</button>
+                    <button onclick="handleFriendRequest('{{ username }}', '{{ request.username }}', false)">Reject</button>
                 </li>
             {% endfor %}
-        {% else %}
-            <li>You have no pending friend requests.</li>
-        {% endif %}
-    </ul>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Pending Friend Requests Awaiting Response...</h2>
+        <ul>
+            {% for pending in pending_friends %}
+                <li>{{ pending.username }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    <script>
+        async function handleFriendRequest(loggedInUsername, friendUsername, isAccepted) {
+            let actionURL = "{{ url_for('handle_friend_request') }}";
+            try {
+                let res = await axios.post(actionURL, JSON.stringify({
+                    username: loggedInUsername,
+                    friend_username: friendUsername,
+                    is_accepted: isAccepted
+                }), {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (res.data === 'Success') {
+                    location.reload();  // Reload the page to update the list
+                } else {
+                    alert('Error handling the friend request.');
+                }
+            } catch (error) {
+                console.error('Failed to process the friend request:', error);
+                alert('Failed to process the friend request.');
+            }
+        }
+    </script>
+
+    <section>
+        <h2>Add a New Friend</h2>
+        <form id="addFriendForm">
+            <input type="text" id="newFriendUsername" placeholder="Enter friend's username" required>
+            <button type="button" onclick="addFriend()">Add</button>
+        </form>
+    </section>
+
+    <script>
+        async function addFriend() {
+            let username = "{{ username }}";  // Assuming you pass the current user's username as a variable to the template
+            let friendUsername = document.getElementById('newFriendUsername').value;
+            if(friendUsername) {
+                let addURL = "{{ url_for('add_friend') }}";
+                try {
+                    let res = await axios.post(addURL, JSON.stringify({
+                        username: username,
+                        friend_username: friendUsername
+                    }), {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    if (res.data === 'Success') {
+                        location.reload();  // Reload the page to show the updated friend list
+                    } else {
+                        alert(res.data.error);  // Correctly display error messages
+                    }
+                } catch (error) {
+                    console.error('Failed to send the friend request:', error);
+                    alert('Failed to send the friend request: ' + (error.response.data.error || error.message));
+                }
+            }
+        }
+    </script>
+
 {% endblock %}
