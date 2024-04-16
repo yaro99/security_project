@@ -1,0 +1,18 @@
+{% extends 'base.jinja' %}
+
+{% block content %} 
+    <h1>Friend List</h1>
+    <ul>
+        {% if friend_requests %}
+            {% for request in friend_requests %}
+                <li id="{{ request.user1.username if request.user2.username == username else request.user2.username }}-request">
+                    {{ request.user1.username if request.user2.username == username else request.user2.username }}
+                    <button onclick="acceptRequest('{{ request.user1.username if request.user2.username == username else request.user2.username }}')">Accept</button>
+                    <button onclick="rejectRequest('{{ request.user1.username if request.user2.username == username else request.user2.username }}')">Reject</button>
+                </li>
+            {% endfor %}
+        {% else %}
+            <li>You have no pending friend requests.</li>
+        {% endif %}
+    </ul>
+{% endblock %}
