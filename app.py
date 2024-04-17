@@ -124,11 +124,15 @@ def login_user():
     session_token = serializer.dumps(username)
     session['user'] = session_token
 
-    # Send the cookie to the client
-    response = make_response(redirect(url_for('friend_list', username=username)))
+    # Prepare a JSON response
+    response_data = {
+        'url': url_for('friend_list', username=username)  # URL for the redirect
+    }
+    response = make_response(jsonify(response_data))
     response.set_cookie('session_token', session_token, httponly=True, secure=True, samesite='Lax')
+    
+    return response
 
-    return url_for('friend_list', username=username)
 
 
 # handles a get request to the signup page
