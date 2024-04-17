@@ -173,13 +173,23 @@ def signup_user():
 def page_not_found(_):
     return render_template('404.jinja'), 404
 
+@app.route('/start_chat', methods=['POST'])
+@login_required
+def start_chat(ss_username):
+    data = request.get_json()
+    friend_username = data['friend_username']
+    # Set the current chat friend's username in the user session
+    session['current_chat_friend'] = friend_username
+    return jsonify({'success': True}), 200
+
+
 # home page, where the messaging app is
 @app.route("/home")
 @login_required
 def home(ss_username):
     if ss_username is None:
         abort(404)
-    return render_template("home.jinja", username=ss_username, )
+    return render_template("home.jinja", username=ss_username)
 
 
 

@@ -109,12 +109,29 @@
 
     <!--// vardaan's code - implemented click to chat starts here-->
     <script>
-        function openChatRoom(friendUsername) {
-            
-            // Redirect to the home page with the friend's username as a query parameter
-            const url = "{{ url_for('home') }}?username={{ username }}&friend=" + friendUsername;
-            window.location.href = url;
+    async function openChatRoom(friendUsername) {
+    try {
+        const startChatURL = "{{ url_for('start_chat') }}";
+        const res = await axios.post(startChatURL, JSON.stringify({
+            friend_username: friendUsername
+        }), {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (res.data.success) {
+            // After successfully setting the session, redirect to the home page
+            window.location.href = "{{ url_for('home') }}";
+        } else {
+            alert('Failed to open chat room.');
         }
+    } catch (error) {
+        console.error('Error opening chat room:', error);
+        alert('Error opening chat room. Please try again.');
+    }
+}
+
     </script>
     <!-- vardaan's code - implemented click to chat starts here -->
 
