@@ -28,8 +28,10 @@ def insert_user(username: str, password: str):
 # Store the hashed_password in your database's user record
 
     with Session(engine) as session:
-
-        user = User(username=username, password=password)
+        # Generate a salt and hash on separate function calls
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+        user = User(username=username, password=hashed_password)
         session.add(user)
         session.commit()
 

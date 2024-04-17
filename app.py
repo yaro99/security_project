@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, abort, url_for, jsonify
 from flask_socketio import SocketIO
 import db
 import secrets
+import bcrypt
 
 # import logging
 
@@ -112,7 +113,10 @@ def login_user():
     if user is None:
         return "Error: User does not exist!"
 
-    if user.password != password:
+    # if user.password != password:
+    #     return "Error: Password does not match!"
+    
+    if not bcrypt.checkpw(password.encode('utf-8'), user.password):
         return "Error: Password does not match!"
 
     # Change the redirect here to point to the friend list route
