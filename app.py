@@ -179,7 +179,7 @@ def page_not_found(_):
 def home(ss_username):
     if ss_username is None:
         abort(404)
-    return render_template("home.jinja", username=ss_username)
+    return render_template("home.jinja", username=ss_username, )
 
 
 
