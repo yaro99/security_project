@@ -4,7 +4,7 @@ this is where you'll find all of the get/post request handlers
 the socket event handlers are inside of socket_routes.py
 '''
 
-from flask import Flask, render_template, request, abort, url_for, jsonify, session
+from flask import Flask, render_template, request, abort, url_for, jsonify, session, make_response, redirect
 from flask_socketio import SocketIO
 from itsdangerous import URLSafeTimedSerializer
 import db
@@ -128,7 +128,7 @@ def login_user():
     response = make_response(redirect(url_for('friend_list', username=username)))
     response.set_cookie('session_token', session_token, httponly=True, secure=True, samesite='Lax')
 
-    return response
+    return url_for('friend_list', username=username)
 
 
 # handles a get request to the signup page
