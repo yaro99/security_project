@@ -130,7 +130,7 @@ def login_user():
     }
     response = make_response(jsonify(response_data))
     response.set_cookie('session_token', session_token, httponly=True, secure=True, samesite='Lax')
-    
+
     return response
 
 
