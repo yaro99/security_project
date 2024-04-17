@@ -13,14 +13,16 @@
 <h1>Messaging App </h1>
     <h1>Friend List</h1>
 
+        <!-- vardaan's code - implemented click to chat starts here -->
     <section>
         <h2>Current Friends</h2>
         <ul>
             {% for friend in accepted_friends %}
-                <li>{{ friend.username }}</li>
+            <li><a href="#" onclick="openChatRoom('{{ friend.username }}')">{{ friend.username }}</a></li>
             {% endfor %}
         </ul>
     </section>
+    <!-- vardaan's code - implemented click to chat ends here -->
 
     <section>
         <h2>Friend Request Inbox</h2>
@@ -104,5 +106,16 @@
             }
         }
     </script>
+
+    <!--// vardaan's code - implemented click to chat starts here-->
+    <script>
+        function openChatRoom(friendUsername) {
+            
+            // Redirect to the home page with the friend's username as a query parameter
+            const url = "{{ url_for('home') }}?username={{ username }}&friend=" + friendUsername;
+            window.location.href = url;
+        }
+    </script>
+    <!-- vardaan's code - implemented click to chat starts here -->
 
 {% endblock %}

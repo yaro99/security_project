@@ -165,7 +165,7 @@ def signup_user():
 
     if db.get_user(username) is None:
         db.insert_user(username, password)
-        return url_for('home', username=username)
+        return url_for('login')
     return "Error: User already exists!"
 
 # handler when a "404" error happens
@@ -176,10 +176,10 @@ def page_not_found(_):
 # home page, where the messaging app is
 @app.route("/home")
 @login_required
-def home():
-    if request.args.get("username") is None:
+def home(ss_username):
+    if ss_username is None:
         abort(404)
-    return render_template("home.jinja", username=request.args.get("username"))
+    return render_template("home.jinja", username=ss_username)
 
 
 
