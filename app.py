@@ -4,8 +4,9 @@ this is where you'll find all of the get/post request handlers
 the socket event handlers are inside of socket_routes.py
 '''
 
-from flask import Flask, render_template, request, abort, url_for, jsonify
+from flask import Flask, render_template, request, abort, url_for, jsonify, session
 from flask_socketio import SocketIO
+from itsdangerous import URLSafeTimedSerializer
 import db
 import secrets
 import bcrypt
@@ -17,6 +18,9 @@ import bcrypt
 # log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
+# I randomly generated this secret key using python to generate 24 random bytes then convert to a string
+app.secret_key = '7pMIu4rniQ1uWrd6NQOMRwMV2Xcosbe0' 
+serializer = URLSafeTimedSerializer(app.secret_key)
 
 # secret key used to sign the session cookie
 app.config['SECRET_KEY'] = secrets.token_hex()
@@ -113,14 +117,18 @@ def login_user():
     if user is None:
         return "Error: User does not exist!"
 
-    # if user.password != password:
-    #     return "Error: Password does not match!"
-    
     if not bcrypt.checkpw(password.encode('utf-8'), user.password):
         return "Error: Password does not match!"
 
-    # Change the redirect here to point to the friend list route
-    return url_for('friend_list', username=username)
+    # if we reach here, login is valid
+    session_token = serializer.dumps(username)
+    session['user'] = session_token
+
+    # Send the cookie to the client
+    response = make_response(redirect(url_for('friend_list', username=username)))
+    response.set_cookie('session_token', session_token, httponly=True, secure=True, samesite='Lax')
+
+    return response
 
 
 # handles a get request to the signup page
