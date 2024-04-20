@@ -62,6 +62,9 @@
 <script src="/static/js/libs/socket.io.min.js"></script>
 <script>
     let room_id = 0;
+    let publicKey, privateKey;
+
+    
 
     // when the user presses the "Enter" key inside of the "message box", 
     // the message is sent to the server
@@ -100,19 +103,86 @@
 
     Cookies.set('username', username);
 
+    async function sendPublicKeyToServer(publicKey) {
+    // Export the public key to a usable format
+    const exportedKey = await window.crypto.subtle.exportKey(
+        "spki", // Use "spki" for public keys
+        publicKey
+    );
+
+    // Convert the exported key to Base64 to send it as a string
+    const keyInBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
+
+    // Use axios to send the public key to the server
+    try {
+        const response = await axios.post('/api/send_public_key', {
+            publicKey: keyInBase64
+        });
+
+        if (response.data.success) {
+            console.log('Public key sent successfully');
+        } else {
+            console.error('Failed to send public key', response.data.error);
+        }
+    } catch (error) {
+        console.error('Error sending public key', error);
+    }
+}
+
+
+    // Generate key pair when the page loads
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const keyPair = await window.crypto.subtle.generateKey(
+                { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+                true,
+                ["encrypt", "decrypt"]
+            );
+            publicKey = keyPair.publicKey;
+            privateKey = keyPair.privateKey;
+            // Assume there's a function to send the public key to the server
+            await sendPublicKeyToServer(publicKey);
+        } catch (err) {
+            console.error("Key generation error:", err);
+        }
+    });
+
+    async function encryptMessage(message, publicKey) {
+        let enc = new TextEncoder();
+        let encodedMessage = enc.encode(message);
+        let encryptedMessage = await window.crypto.subtle.encrypt(
+            { name: "RSA-OAEP" },
+            publicKey,
+            encodedMessage
+        );
+        return new Uint8Array(encryptedMessage);
+    }
+
+    async function decryptMessage(encryptedMessage, privateKey) {
+        let decryptedMessage = await window.crypto.subtle.decrypt(
+            { name: "RSA-OAEP" },
+            privateKey,
+            encryptedMessage
+        );
+        let dec = new TextDecoder();
+        return dec.decode(decryptedMessage);
+    }
+
     // initializes the socket
     const socket = io();
 
     // an incoming message arrives, we'll add the message to the message box
-    socket.on("incoming", (msg, color="black") => {
-        add_message(msg, color);
-    })
+    socket.on("incoming", async (msg) => {
+        const decryptedMessage = await decryptMessage(msg, privateKey);
+        add_message(decryptedMessage, "black");
+    });
     
     // we'll send the message to the server by emitting a "send" event
-    function send() {
+    async function send() {
         let message = $("#message").val();
         $("#message").val("");
-        socket.emit("send", username, message, room_id);  
+        const encryptedMessage = await encryptMessage(message, publicKey);
+        socket.emit("send", username, encryptedMessage, room_id);
     } 
 
     // we emit a join room event to the server to join a room

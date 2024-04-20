@@ -192,6 +192,24 @@ def home(ss_username):
     return render_template("home.jinja", username=ss_username)
 
 
+@app.route('/api/send_public_key', methods=['POST'])
+@login_required
+def receive_public_key(ss_username):
+    username = ss_username  
+    public_key = request.json.get('publicKey')
+    
+    # You might want to store this key in a database associated with the user
+    save_public_key(username, public_key)
+
+    return jsonify(success=True)
+
+def save_public_key(username, public_key):
+
+
+    db.insert_public_key(username, public_key)
+
+
+
 
 if __name__ == '__main__':
     socketio.run(app)

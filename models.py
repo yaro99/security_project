@@ -10,9 +10,10 @@ Prisma docs also looks so much better in comparison
 or use SQLite, if you're not into fancy ORMs (but be mindful of Injection attacks :) )
 '''
 
-from sqlalchemy import String, Column, ForeignKey, Boolean
+from sqlalchemy import String, Column, ForeignKey, Boolean, Integer, create_engine, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Dict
+import datetime
 
 # data models
 class Base(DeclarativeBase):
@@ -29,6 +30,20 @@ class User(Base):
     # in other words we've mapped the username Python object property to an SQL column of type String 
     username: Mapped[str] = mapped_column(String, primary_key=True)
     password: Mapped[str] = mapped_column(String)
+    # Link to the public key
+    public_key = relationship("PublicKey", back_populates="user", uselist=False)
+
+# model to store public keys
+class PublicKey(Base):
+    __tablename__ = "public_keys"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String, ForeignKey('user.username'))
+    key_data: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    
+    # Relationship to User
+    user = relationship("User", back_populates="public_key")
 
 # model to store friends
 class Friend(Base):
