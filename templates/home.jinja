@@ -301,6 +301,28 @@ async function sendPublicKeyToServer(publicKeyBase64) {
         }
     });
 
+    socket.on("message_incoming", async (sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, color="black") => {
+        let decryptedMessage;
+        try {
+            // Message is encrypted, decrypt it
+            //const arrayBuffer = base64ToArrayBuffer(msg);
+
+            if (username == sender_username) {
+                console.log("using sender");
+                decryptedMessage = await decryptMessage(message_sender_encrypted, privateKey);
+            }
+
+            else {
+                decryptedMessage = await decryptMessage(message_receiver_encrypted, privateKey);
+            }
+
+            
+            add_message(decryptedMessage, color);  // Use the decrypted message here
+        } catch (error) {
+            console.error("Error handling incoming message:", error);
+        }
+    });
+
 
 
     

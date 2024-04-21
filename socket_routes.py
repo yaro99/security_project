@@ -57,7 +57,8 @@ def disconnect():
 def send(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, room_id):
 
     # print(f"sending msg from socket_routes.py: {message_sender_encrypted}")
-    emit("incoming", message_sender_encrypted, to=room_id)
+    #emit("incoming", message_sender_encrypted, to=room_id)
+    emit("message_incoming", (sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted), to=room_id)
 
     db.insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted)
 
