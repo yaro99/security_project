@@ -57,6 +57,20 @@ def index():
 def login():    
     return render_template("login.jinja")
 
+# getting public key when needed
+@app.route('/api/get_public_key')
+@login_required
+def get_public_key(ss_username):
+    username = request.args.get('username')
+    if not username:
+        return jsonify({'error': 'Username is required'}), 400
+    
+    public_key = db.get_public_key(username)
+    if public_key:
+        return jsonify({'publicKey': public_key})
+    else:
+        return jsonify({'error': 'Public key not found'}), 404
+
 @app.route('/friends')
 @login_required
 def friend_list(ss_username):
@@ -173,14 +187,6 @@ def signup_user():
 def page_not_found(_):
     return render_template('404.jinja'), 404
 
-@app.route('/start_chat', methods=['POST'])
-@login_required
-def start_chat(ss_username):
-    data = request.get_json()
-    friend_username = data['friend_username']
-    # Set the current chat friend's username in the user session
-    session['current_chat_friend'] = friend_username
-    return jsonify({'success': True}), 200
 
 
 # home page, where the messaging app is

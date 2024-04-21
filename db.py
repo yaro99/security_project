@@ -46,9 +46,7 @@ def insert_public_key(username, public_key):
         # Check if there already exists a public key for the user
         existing_key = session.query(PublicKey).filter_by(username=username).first()
         if existing_key:
-            # If a public key already exists, update it
-            existing_key.key_data = public_key
-            existing_key.created_at = datetime.datetime.utcnow()
+            return False, "public key already existed, cannot insert again"
         else:
             # If no public key exists, create a new one
             new_key = PublicKey(username=username, key_data=public_key)
@@ -57,6 +55,12 @@ def insert_public_key(username, public_key):
         session.commit()
         return True, "Public key saved successfully."
     
+def get_public_key(username):
+    # Assume you have a session setup and a PublicKey model defined
+    with Session(engine) as session:
+        key_data = session.query(PublicKey).filter_by(username=username).first()
+        return key_data.key_data if key_data else None
+
 
 def get_friends(username: str):
     with Session(engine) as session:

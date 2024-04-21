@@ -62,6 +62,7 @@
 <script src="/static/js/libs/socket.io.min.js"></script>
 <script>
     let room_id = 0;
+    let publicKeyReady = false;
     let publicKey, privateKey;
 
     
@@ -86,6 +87,16 @@
     $(document).ready(() => {
         // room_id is undefined if the user hasn't joined a room
         // we early return in this case
+
+        const autoChatWith = Cookies.get('auto_chat_with');
+        if (autoChatWith) {
+            // Set the receiver's username and call join_room automatically
+            $('#receiver').val(autoChatWith);
+            join_room();
+
+            // Clear the cookie so it doesn't auto-join next time the page loads
+            Cookies.remove('auto_chat_with');
+        }
         if (Cookies.get("room_id") == undefined) {
             return;
         }
@@ -100,62 +111,100 @@
     // Here's the Socket IO part of the code
     // things get a bit complicated here so brace yourselves :P
     let username = "{{ username }}";
-
+    // ATTN WANT TO GET RID OF THIS
     Cookies.set('username', username);
 
     async function sendPublicKeyToServer(publicKey) {
-    // Export the public key to a usable format
-    const exportedKey = await window.crypto.subtle.exportKey(
-        "spki", // Use "spki" for public keys
-        publicKey
-    );
+            // Export the public key to a usable format
+            const exportedKey = await window.crypto.subtle.exportKey(
+                "spki", // Use "spki" for public keys
+                publicKey
+            );
 
-    // Convert the exported key to Base64 to send it as a string
-    const keyInBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
+            // Convert the exported key to Base64 to send it as a string
+            const keyInBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
 
-    // Use axios to send the public key to the server
-    try {
-        const response = await axios.post('/api/send_public_key', {
-            publicKey: keyInBase64
-        });
+            // Use axios to send the public key to the server
+            try {
+                const response = await axios.post('/api/send_public_key', {
+                    publicKey: keyInBase64
+                });
 
-        if (response.data.success) {
-            console.log('Public key sent successfully');
-        } else {
-            console.error('Failed to send public key', response.data.error);
+                if (response.data.success) {
+                    console.log('Public key sent successfully');
+                } else {
+                    console.error('Failed to send public key', response.data.error);
+                }
+            } catch (error) {
+                console.error('Error sending public key', error);
+            }
         }
-    } catch (error) {
-        console.error('Error sending public key', error);
-    }
-}
 
 
-    // Generate key pair when the page loads
     document.addEventListener('DOMContentLoaded', async () => {
         try {
-            const keyPair = await window.crypto.subtle.generateKey(
-                {
-                    name: "RSA-OAEP",
-                    modulusLength: 2048,
-                    publicExponent: new Uint8Array([1, 0, 1]),
-                    hash: "SHA-256"
-                },
-                true,
-                ["encrypt", "decrypt"]
-            );
-            publicKey = keyPair.publicKey;
-            privateKey = keyPair.privateKey;
+            const privateKeyStorageKey = username + "_privateKey";
+            const publicKeyStorageKey = username + "_publicKey";
+
+            let privateKeyBase64 = localStorage.getItem(privateKeyStorageKey);
+            let publicKeyBase64 = localStorage.getItem(publicKeyStorageKey);
+
+            if (privateKeyBase64 && publicKeyBase64) {
+                const privateKeyArrayBuffer = base64ToArrayBuffer(privateKeyBase64);
+                const publicKeyArrayBuffer = base64ToArrayBuffer(publicKeyBase64);
+
+                privateKey = await window.crypto.subtle.importKey(
+                    "pkcs8",
+                    privateKeyArrayBuffer,
+                    { name: "RSA-OAEP", hash: "SHA-256" },
+                    true,
+                    ["decrypt"]
+                );
+
+                publicKey = await window.crypto.subtle.importKey(
+                    "spki",
+                    publicKeyArrayBuffer,
+                    { name: "RSA-OAEP", hash: "SHA-256" },
+                    true,
+                    ["encrypt"]
+                );
+            } else {
+                const keyPair = await window.crypto.subtle.generateKey(
+                    {
+                        name: "RSA-OAEP",
+                        modulusLength: 2048,
+                        publicExponent: new Uint8Array([1, 0, 1]),
+                        hash: "SHA-256"
+                    },
+                    true, // whether the key is extractable (i.e. can be used in exportKey)
+                    ["encrypt", "decrypt"] // must be ["encrypt", "decrypt"], or an equivalent array
+                );
+
+                publicKey = keyPair.publicKey;
+                privateKey = keyPair.privateKey;
+
+                const exportedPrivateKey = await window.crypto.subtle.exportKey("pkcs8", privateKey);
+                const exportedPublicKey = await window.crypto.subtle.exportKey("spki", publicKey);
+
+                privateKeyBase64 = arrayBufferToBase64(exportedPrivateKey);
+                publicKeyBase64 = arrayBufferToBase64(exportedPublicKey);
+
+                localStorage.setItem(privateKeyStorageKey, privateKeyBase64);
+                localStorage.setItem(publicKeyStorageKey, publicKeyBase64);
+
+                await sendPublicKeyToServer(publicKey);
+            }
 
             console.log("Public Key type:", publicKey.constructor.name); // Should be "CryptoKey"
             console.log("Private Key type:", privateKey.constructor.name); // Should be "CryptoKey"
-
-            await sendPublicKeyToServer(publicKey);
+            publicKeyReady = true;
         } catch (err) {
             console.error("Key generation error:", err);
         }
     });
 
     async function encryptMessage(message, publicKey) {
+        try{
         let enc = new TextEncoder();
         let encodedMessage = enc.encode(message);
         let encryptedMessage = await window.crypto.subtle.encrypt(
@@ -164,9 +213,14 @@
             encodedMessage
         );
         return new Uint8Array(encryptedMessage);
+        }
+        catch (error) {
+            console.error("Encryption error:", error);
+        }
     }
 
     async function decryptMessage(encryptedMessage, privateKey) {
+        try{
         let decryptedMessage = await window.crypto.subtle.decrypt(
             { name: "RSA-OAEP" },
             privateKey,
@@ -174,10 +228,28 @@
         );
         let dec = new TextDecoder();
         return dec.decode(decryptedMessage);
+        } catch (error) {
+            console.error("Decryption error:", error);
+        }
     }
 
+    
     // initializes the socket
     const socket = io();
+
+    async function initializeConnection() {
+        let connection = username + " has connected.";
+        console.log("before");
+        if (!publicKey) {
+            console.error("Public key is not ready!");
+            return;
+        }
+        console.log("Public Key type:", publicKey.constructor.name); // Should be "CryptoKey"
+        const enctext_connection = await encryptMessage(connection, publicKey);
+        console.log("after");
+        socket.emit("do_connection", enctext_connection);
+    }
+
 
     function base64ToArrayBuffer(base64) {
         const binaryString = window.atob(base64); // Decode base64 to string
@@ -189,41 +261,76 @@
         return bytes.buffer; // Convert Uint8Array to ArrayBuffer
     }
 
-    socket.on("incoming", async (data) => {
-    try {
-        if (data.encrypted) {
-            console.log('msg data was encrypted')
-            // Message is encrypted, decrypt it
-            const arrayBuffer = base64ToArrayBuffer(data.msg);
-            const decryptedMessage = await decryptMessage(arrayBuffer, privateKey);
-            add_message(decryptedMessage, "black");
-        } else {
-            // Message is not encrypted, display as is
-            add_message(data.msg, data.color);
-        }
-    } catch (error) {
-        console.error("Error handling incoming message:", error);
+    function arrayBufferToBase64(buffer) {
+    var binary = '';
+    var bytes = new Uint8Array(buffer);
+    var len = bytes.byteLength;
+    for (var i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
     }
-});
+    return window.btoa(binary);
+    }
+
+    socket.on("incoming", async (msg, color="black") => {
+        try {
+            // Message is encrypted, decrypt it
+            //const arrayBuffer = base64ToArrayBuffer(msg);
+            const decryptedMessage = await decryptMessage(msg, privateKey);
+            add_message(decryptedMessage, color);  // Use the decrypted message here
+        } catch (error) {
+            console.error("Error handling incoming message:", error);
+        }
+    });
+
 
 
     
     // we'll send the message to the server by emitting a "send" event
     async function send() {
-        let message = $("#message").val();
+        let message = username + ": " + $("#message").val();
         $("#message").val("");
         const encryptedMessage = await encryptMessage(message, publicKey);
-        socket.emit("send", username, encryptedMessage, room_id);
+        socket.emit("send", encryptedMessage, room_id);
     } 
 
     // we emit a join room event to the server to join a room
-    function join_room() {
+    async function join_room() {
        
         let receiver = $("#receiver").val();
+        let receiverPublicKey = localStorage.getItem(receiver + "_publicKey");
+        
+        if (!receiverPublicKey) {
+            // No public key in localStorage, retrieve from the server
+            try {
+                const response = await axios.get('/api/get_public_key', {
+                    params: { username: receiver }
+                });
+
+                if (response.data && response.data.publicKey) {
+                    // Save the retrieved public key in localStorage
+                    localStorage.setItem(receiver + "_publicKey", response.data.publicKey);
+                    receiverPublicKey = response.data.publicKey;
+                } else {
+                    alert("Could not retrieve public key for user: " + receiver);
+                    return;
+                }
+            } catch (error) {
+                console.error('Error retrieving public key', error);
+                alert("Error retrieving public key for user: " + receiver);
+                return;
+            }
+        }
 
         // pass in the receiver of our message to the server
         // as well as the current user's username
-        socket.emit("join", username, receiver, (res) => {
+        let message2 = username + " has joined the room.";
+        const enctext_join = await encryptMessage(message2, publicKey);
+
+        let message3 = username + " has joined the room. Now talking to " + receiver;
+        const enctext_join_talkingto = await encryptMessage(message3, publicKey);
+        console.log("enctext: " + enctext_join_talkingto);
+
+        socket.emit("join", username, receiver, enctext_join, enctext_join_talkingto, (res) => {
             // res is a string with the error message if the error occurs
             // this is a pretty bad way of doing error handling, but watevs
             if (typeof res != "number") {
@@ -244,9 +351,12 @@
 
     // function when the user clicks on "Leave Room"
     // emits a "leave" event, telling the server that we want to leave the room
-    function leave() {
+    async function leave() {
+        let message4 = username + " has left the room.";
+        const enctext_leave = await encryptMessage(message4, publicKey);
         Cookies.remove("room_id");
-        socket.emit("leave", username, room_id);
+        
+        socket.emit("leave", username, enctext_leave, room_id);
         $("#input_box").hide();
         $("#chat_box").show();
     }
