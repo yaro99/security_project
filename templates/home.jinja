@@ -63,7 +63,8 @@
 <script>
     let room_id = 0;
     let publicKeyReady = false;
-    let publicKey, privateKey;
+    let receiverUsername = '';
+    let publicKey, privateKey, receiverPublicKey;
 
     
 
@@ -288,28 +289,31 @@
     // we'll send the message to the server by emitting a "send" event
     async function send() {
         let message = username + ": " + $("#message").val();
-        $("#message").val("");
-        const encryptedMessage = await encryptMessage(message, publicKey);
-        socket.emit("send", encryptedMessage, room_id);
+        const message_sender_encrypted = await encryptMessage(message, publicKey);
+        const message_receiver_encrypted = await encryptMessage(message, receiverPublicKey);
+        console.log("receiver user name just before sending: " + receiverUsername);
+        socket.emit("send", username, receiverUsername, message_sender_encrypted, message_receiver_encrypted, room_id);
+
+
+        //signature: def send(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, room_id):
     } 
 
     // we emit a join room event to the server to join a room
     async function join_room() {
        
         let receiver = $("#receiver").val();
-        let receiverPublicKey = localStorage.getItem(receiver + "_publicKey");
-        
-        if (!receiverPublicKey) {
+        receiverUsername = receiver;
+        console.log("receiver user name " + receiverUsername);
+        let receiverPublicKeyData = localStorage.getItem(receiver + "_publicKey");
+
+        if (!receiverPublicKeyData) {
             // No public key in localStorage, retrieve from the server
             try {
-                const response = await axios.get('/api/get_public_key', {
-                    params: { username: receiver }
-                });
-
+                const response = await axios.get('/api/get_public_key', { params: { username: receiver } });
                 if (response.data && response.data.publicKey) {
                     // Save the retrieved public key in localStorage
                     localStorage.setItem(receiver + "_publicKey", response.data.publicKey);
-                    receiverPublicKey = response.data.publicKey;
+                    receiverPublicKeyData = response.data.publicKey;
                 } else {
                     alert("Could not retrieve public key for user: " + receiver);
                     return;
@@ -320,6 +324,28 @@
                 return;
             }
         }
+
+        // Convert Base64 string to ArrayBuffer
+        if (receiverPublicKeyData) {
+            const arrayBuffer = base64ToArrayBuffer(receiverPublicKeyData);
+            try {
+                // Import the public key to use it for encryption
+                receiverPublicKey = await window.crypto.subtle.importKey(
+                    "spki",
+                    arrayBuffer,
+                    {
+                        name: "RSA-OAEP",
+                        hash: {name: "SHA-256"}
+                    },
+                    true,
+                    ["encrypt"]
+                );
+            } catch (e) {
+                console.error("Error importing key: ", e);
+                alert("Failed to import public key");
+                return;
+            }
+    }
 
         // pass in the receiver of our message to the server
         // as well as the current user's username

@@ -54,9 +54,12 @@ def disconnect():
 
 # send message event handler
 @socketio.on("send")
-def send(encmessage, room_id):
-    print(f"sending msg from socket_routes.py: {encmessage}")
-    emit("incoming", encmessage, to=room_id)
+def send(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, room_id):
+
+    # print(f"sending msg from socket_routes.py: {message_sender_encrypted}")
+    emit("incoming", message_sender_encrypted, to=room_id)
+
+    db.insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted)
 
 # join room event handler
 # sent when the user joins a room

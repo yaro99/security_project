@@ -6,7 +6,14 @@ database file, containing all the logic to interface with the sql database
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from models import *
+from datetime import datetime
 import bcrypt
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+
+
 
 from pathlib import Path
 
@@ -54,6 +61,19 @@ def insert_public_key(username, public_key):
             
         session.commit()
         return True, "Public key saved successfully."
+    
+def insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted):
+    with Session(engine) as session:
+        new_message = Message(
+            sender_username=sender_username,
+            receiver_username=receiver_username,
+            message_sender_encrypted=message_sender_encrypted,
+            message_receiver_encrypted=message_receiver_encrypted,
+            time_sent=datetime.now(ZoneInfo("Australia/Sydney"))
+        )
+        session.add(new_message)
+        session.commit()
+    return True, "Message saved successfully."
     
 def get_public_key(username):
     # Assume you have a session setup and a PublicKey model defined
