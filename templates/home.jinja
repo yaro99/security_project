@@ -85,9 +85,16 @@
     })
 
 
-    $(document).ready(() => {
+    $(document).ready(async () => {
         // room_id is undefined if the user hasn't joined a room
         // we early return in this case
+        try {
+        let username = "{{ username }}";
+        await ensureKeysAreReady(username);  // Ensure keys are ready before proceeding
+        initializeConnection();  // Initialize connection only after keys are confirmed ready
+    } catch (err) {
+        console.error("Initialization error:", err);
+    }
 
         const autoChatWith = Cookies.get('auto_chat_with');
         if (autoChatWith) {
@@ -115,94 +122,92 @@
     // ATTN WANT TO GET RID OF THIS
     Cookies.set('username', username);
 
-    async function sendPublicKeyToServer(publicKey) {
-            // Export the public key to a usable format
-            const exportedKey = await window.crypto.subtle.exportKey(
-                "spki", // Use "spki" for public keys
-                publicKey
-            );
 
-            // Convert the exported key to Base64 to send it as a string
-            const keyInBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
-
-            // Use axios to send the public key to the server
-            try {
-                const response = await axios.post('/api/send_public_key', {
-                    publicKey: keyInBase64
-                });
-
-                if (response.data.success) {
-                    console.log('Public key sent successfully');
-                } else {
-                    console.error('Failed to send public key', response.data.error);
-                }
-            } catch (error) {
-                console.error('Error sending public key', error);
-            }
-        }
 
 
     document.addEventListener('DOMContentLoaded', async () => {
-        try {
-            const privateKeyStorageKey = username + "_privateKey";
-            const publicKeyStorageKey = username + "_publicKey";
+    
+});
 
-            let privateKeyBase64 = localStorage.getItem(privateKeyStorageKey);
-            let publicKeyBase64 = localStorage.getItem(publicKeyStorageKey);
+async function ensureKeysAreReady(username) {
+    const privateKeyStorageKey = username + "_privateKey";
+    const publicKeyStorageKey = username + "_publicKey";
 
-            if (privateKeyBase64 && publicKeyBase64) {
-                const privateKeyArrayBuffer = base64ToArrayBuffer(privateKeyBase64);
-                const publicKeyArrayBuffer = base64ToArrayBuffer(publicKeyBase64);
+    let privateKeyBase64 = localStorage.getItem(privateKeyStorageKey);
+    let publicKeyBase64 = localStorage.getItem(publicKeyStorageKey);
 
-                privateKey = await window.crypto.subtle.importKey(
-                    "pkcs8",
-                    privateKeyArrayBuffer,
-                    { name: "RSA-OAEP", hash: "SHA-256" },
-                    true,
-                    ["decrypt"]
-                );
+    if (privateKeyBase64 && publicKeyBase64) {
+        await importKeysFromStorage(privateKeyBase64, publicKeyBase64);
+    } else {
+        await generateAndStoreKeys(username);
+    }
+}
 
-                publicKey = await window.crypto.subtle.importKey(
-                    "spki",
-                    publicKeyArrayBuffer,
-                    { name: "RSA-OAEP", hash: "SHA-256" },
-                    true,
-                    ["encrypt"]
-                );
-            } else {
-                const keyPair = await window.crypto.subtle.generateKey(
-                    {
-                        name: "RSA-OAEP",
-                        modulusLength: 2048,
-                        publicExponent: new Uint8Array([1, 0, 1]),
-                        hash: "SHA-256"
-                    },
-                    true, // whether the key is extractable (i.e. can be used in exportKey)
-                    ["encrypt", "decrypt"] // must be ["encrypt", "decrypt"], or an equivalent array
-                );
+async function importKeysFromStorage(privateKeyBase64, publicKeyBase64) {
+    const privateKeyArrayBuffer = base64ToArrayBuffer(privateKeyBase64);
+    const publicKeyArrayBuffer = base64ToArrayBuffer(publicKeyBase64);
 
-                publicKey = keyPair.publicKey;
-                privateKey = keyPair.privateKey;
+    privateKey = await window.crypto.subtle.importKey(
+        "pkcs8",
+        privateKeyArrayBuffer,
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        true,
+        ["decrypt"]
+    );
 
-                const exportedPrivateKey = await window.crypto.subtle.exportKey("pkcs8", privateKey);
-                const exportedPublicKey = await window.crypto.subtle.exportKey("spki", publicKey);
+    publicKey = await window.crypto.subtle.importKey(
+        "spki",
+        publicKeyArrayBuffer,
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        true,
+        ["encrypt"]
+    );
+    console.log("Keys imported successfully.");
+}
 
-                privateKeyBase64 = arrayBufferToBase64(exportedPrivateKey);
-                publicKeyBase64 = arrayBufferToBase64(exportedPublicKey);
+async function generateAndStoreKeys(username) {
+    const keyPair = await window.crypto.subtle.generateKey(
+        {
+            name: "RSA-OAEP",
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-256"
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
 
-                localStorage.setItem(privateKeyStorageKey, privateKeyBase64);
-                localStorage.setItem(publicKeyStorageKey, publicKeyBase64);
+    publicKey = keyPair.publicKey;
+    privateKey = keyPair.privateKey;
 
-                await sendPublicKeyToServer(publicKey);
-            }
+    const exportedPrivateKey = await window.crypto.subtle.exportKey("pkcs8", privateKey);
+    const exportedPublicKey = await window.crypto.subtle.exportKey("spki", publicKey);
 
-            console.log("Public Key type:", publicKey.constructor.name); // Should be "CryptoKey"
-            console.log("Private Key type:", privateKey.constructor.name); // Should be "CryptoKey"
-            publicKeyReady = true;
-        } catch (err) {
-            console.error("Key generation error:", err);
+    const privateKeyBase64 = arrayBufferToBase64(exportedPrivateKey);
+    const publicKeyBase64 = arrayBufferToBase64(exportedPublicKey);
+
+    localStorage.setItem(username + "_privateKey", privateKeyBase64);
+    localStorage.setItem(username + "_publicKey", publicKeyBase64);
+
+    await sendPublicKeyToServer(publicKeyBase64);  // Send to server in Base64 format
+    console.log("Keys generated and stored successfully.");
+}
+
+async function sendPublicKeyToServer(publicKeyBase64) {
+    try {
+        const response = await axios.post('/api/send_public_key', {
+            publicKey: publicKeyBase64
+        });
+        if (response.data.success) {
+            console.log('Public key sent successfully');
+        } else {
+            console.error('Failed to send public key', response.data.error);
         }
-    });
+    } catch (error) {
+        console.error('Error sending public key', error);
+    }
+}
+
 
     async function encryptMessage(message, publicKey) {
         try{
@@ -240,43 +245,56 @@
 
     async function initializeConnection() {
         let connection = username + " has connected.";
-        console.log("before");
+        
         if (!publicKey) {
             console.error("Public key is not ready!");
             return;
         }
         console.log("Public Key type:", publicKey.constructor.name); // Should be "CryptoKey"
         const enctext_connection = await encryptMessage(connection, publicKey);
-        console.log("after");
+        
+        console.log("before");
         socket.emit("do_connection", enctext_connection);
+        console.log("after");
     }
 
 
     function base64ToArrayBuffer(base64) {
-        const binaryString = window.atob(base64); // Decode base64 to string
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-        return bytes.buffer; // Convert Uint8Array to ArrayBuffer
+            const binaryString = window.atob(base64); // Decode base64 to string
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer; // Convert Uint8Array to ArrayBuffer
     }
 
     function arrayBufferToBase64(buffer) {
-    var binary = '';
-    var bytes = new Uint8Array(buffer);
-    var len = bytes.byteLength;
-    for (var i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
+        var binary = '';
+        var bytes = new Uint8Array(buffer);
+        var len = bytes.byteLength;
+        for (var i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
     }
 
-    socket.on("incoming", async (msg, color="black") => {
+    // 
+    socket.on("incoming", async (msg, color="black", useKey=privateKey) => {
+        let decryptedMessage;
         try {
             // Message is encrypted, decrypt it
             //const arrayBuffer = base64ToArrayBuffer(msg);
-            const decryptedMessage = await decryptMessage(msg, privateKey);
+            console.log("this is on incoming...");
+            if (useKey == "recipient") {
+                console.log("using recipient");
+                decryptedMessage = await decryptMessage(msg, receiverPublicKey);
+            }
+            else {
+                decryptedMessage = await decryptMessage(msg, privateKey);
+            }
+
+            
             add_message(decryptedMessage, color);  // Use the decrypted message here
         } catch (error) {
             console.error("Error handling incoming message:", error);
@@ -350,13 +368,21 @@
         // pass in the receiver of our message to the server
         // as well as the current user's username
         let message2 = username + " has joined the room.";
-        const enctext_join = await encryptMessage(message2, publicKey);
+        console.log("just before enctext_join and enctext_join_talkingto");
+        // ATTN 
+        console.log("publicKey: " + publicKey);
+        console.log("receiverPublicKey: " + receiverPublicKey);
+        const joined_sender_encrypted = await encryptMessage(message2, publicKey);
+        const joined_receiver_encrypted = await encryptMessage(message2, receiverPublicKey);
 
         let message3 = username + " has joined the room. Now talking to " + receiver;
-        const enctext_join_talkingto = await encryptMessage(message3, publicKey);
-        console.log("enctext: " + enctext_join_talkingto);
+        const joined_talking_to_sender_encrypted = await encryptMessage(message3, publicKey);
+        const joined_talking_to_receiver_encrypted = await encryptMessage(message3, receiverPublicKey);
+        console.log("enctext: " + joined_talking_to_sender_encrypted);
 
-        socket.emit("join", username, receiver, enctext_join, enctext_join_talkingto, (res) => {
+
+        // def join(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_encrypted, joined_talking_to_sender_encrypted, joined_talking_to_receiver_encrypted):
+        socket.emit("join", username, receiver, joined_sender_encrypted, joined_receiver_encrypted, joined_talking_to_sender_encrypted, joined_talking_to_receiver_encrypted, (res) => {
             // res is a string with the error message if the error occurs
             // this is a pretty bad way of doing error handling, but watevs
             if (typeof res != "number") {

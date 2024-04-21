@@ -47,6 +47,102 @@
     </section>
 
     <script>
+        let publicKeyReady = false;
+        let publicKey, privateKey, receiverPublicKey;
+        let username = "{{ username }}";
+
+
+        document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const privateKeyStorageKey = username + "_privateKey";
+            const publicKeyStorageKey = username + "_publicKey";
+
+            let privateKeyBase64 = localStorage.getItem(privateKeyStorageKey);
+            let publicKeyBase64 = localStorage.getItem(publicKeyStorageKey);
+
+            if (!(privateKeyBase64 && publicKeyBase64)) {
+                
+                const keyPair = await window.crypto.subtle.generateKey(
+                    {
+                        name: "RSA-OAEP",
+                        modulusLength: 2048,
+                        publicExponent: new Uint8Array([1, 0, 1]),
+                        hash: "SHA-256"
+                    },
+                    true, // whether the key is extractable (i.e. can be used in exportKey)
+                    ["encrypt", "decrypt"] // must be ["encrypt", "decrypt"], or an equivalent array
+                );
+
+                publicKey = keyPair.publicKey;
+                privateKey = keyPair.privateKey;
+
+                const exportedPrivateKey = await window.crypto.subtle.exportKey("pkcs8", privateKey);
+                const exportedPublicKey = await window.crypto.subtle.exportKey("spki", publicKey);
+
+                privateKeyBase64 = arrayBufferToBase64(exportedPrivateKey);
+                publicKeyBase64 = arrayBufferToBase64(exportedPublicKey);
+
+                localStorage.setItem(privateKeyStorageKey, privateKeyBase64);
+                localStorage.setItem(publicKeyStorageKey, publicKeyBase64);
+
+                await sendPublicKeyToServer(publicKey);
+            }
+
+            console.log("Public Key type:", publicKey.constructor.name); // Should be "CryptoKey"
+            console.log("Private Key type:", privateKey.constructor.name); // Should be "CryptoKey"
+
+
+        } catch (err) {
+            console.error("Key generation error:", err);
+        }
+    });
+
+    async function sendPublicKeyToServer(publicKey) {
+            // Export the public key to a usable format
+            const exportedKey = await window.crypto.subtle.exportKey(
+                "spki", // Use "spki" for public keys
+                publicKey
+            );
+
+            // Convert the exported key to Base64 to send it as a string
+            const keyInBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
+
+            // Use axios to send the public key to the server
+            try {
+                const response = await axios.post('/api/send_public_key', {
+                    publicKey: keyInBase64
+                });
+
+                if (response.data.success) {
+                    console.log('Public key sent successfully');
+                } else {
+                    console.error('Failed to send public key', response.data.error);
+                }
+            } catch (error) {
+                console.error('Error sending public key', error);
+            }
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64); // Decode base64 to string
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer; // Convert Uint8Array to ArrayBuffer
+        }
+
+        function arrayBufferToBase64(buffer) {
+            var binary = '';
+            var bytes = new Uint8Array(buffer);
+            var len = bytes.byteLength;
+            for (var i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
         async function handleFriendRequest(loggedInUsername, friendUsername, isAccepted) {
             let actionURL = "{{ url_for('handle_friend_request') }}";
             try {

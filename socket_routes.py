@@ -64,8 +64,7 @@ def send(sender_username, receiver_username, message_sender_encrypted, message_r
 # join room event handler
 # sent when the user joins a room
 @socketio.on("join")
-def join(sender_name, receiver_name, enctext_joined, enctext_joined_talking_to):
-    
+def join(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_encrypted, joined_talking_to_sender_encrypted, joined_talking_to_receiver_encrypted):
     receiver = db.get_user(receiver_name)
     if receiver is None:
         return "Unknown receiver!"
@@ -76,34 +75,23 @@ def join(sender_name, receiver_name, enctext_joined, enctext_joined_talking_to):
 
     room_id = room.get_room_id(receiver_name)
 
-    # If the user is already inside of a room
-    if room_id is not None:
-        
-        room.join_room(sender_name, room_id)
-        print(f"roomid was set, receiver: {receiver_name}, sender: {sender_name}, room_id: {room_id}")
-        join_room(room_id)
-        # emit to everyone in room except sender
-        emit("incoming", (enctext_joined, "green"), to=room_id, include_self=False)
+    if room_id is None:
+        room_id = room.create_room(sender_name, receiver_name)
 
-        # emit only to the sender
-        print("before enc_joined_talking_to")
-        emit("incoming", (enctext_joined_talking_to, "green"))
-        print("after enc_joined_talking_to")
-        return room_id
-    
-    # if the user isn't inside of any room, 
-    # perhaps this user has recently left a room
-    # or is simply a new user looking to chat with someone
-
-    room_id = room.create_room(sender_name, receiver_name)
-    
     join_room(room_id)
-    print(f"roomid wasn't set, receiver: {receiver_name}, sender: {sender_name}, room_id: {room_id}")
-    print("beforeinc")
-    # ATTN definite source of error
-    emit("incoming", (enctext_joined_talking_to, "green"), to=room_id)
-    print("afterinc")
+    
+    # Fetch past messages and emit them
+    messages = db.get_messages(sender_name, receiver_name)
+    for message in messages:
+        if message.sender_username == sender_name:
+            emit("incoming", (message.message_sender_encrypted, "gray"), to=room_id)
+        elif message.receiver_username == sender_name:
+            emit("incoming", (message.message_receiver_encrypted, "gray"), useKey="recipient", to=room_id)
+    
+    emit("incoming", (joined_talking_to_sender_encrypted, "green"), to=room_id)
+    db.insert_message(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_encrypted)
     return room_id
+
 
 # leave room event handler
 @socketio.on("leave")

@@ -80,6 +80,15 @@ def get_public_key(username):
     with Session(engine) as session:
         key_data = session.query(PublicKey).filter_by(username=username).first()
         return key_data.key_data if key_data else None
+    
+def get_messages(sender_username, receiver_username):
+    with Session(engine) as session:
+        messages = session.query(Message).filter(
+            ((Message.sender_username == sender_username) & (Message.receiver_username == receiver_username)) |
+            ((Message.sender_username == receiver_username) & (Message.receiver_username == sender_username))
+        ).all()
+        return messages
+
 
 
 def get_friends(username: str):
