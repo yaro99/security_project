@@ -45,6 +45,20 @@ class PublicKey(Base):
     # Relationship to User
     user = relationship("User", back_populates="public_key")
 
+class Message(Base):
+    __tablename__ = 'messages'
+
+    # Define columns for the message details
+    sender_username: Mapped[str] = mapped_column(String, ForeignKey('user.username'))
+    receiver_username: Mapped[str] = mapped_column(String, ForeignKey('user.username'))
+    message_sender_encrypted: Mapped[str] = mapped_column(String)
+    message_receiver_encrypted: Mapped[str] = mapped_column(String)
+    time_sent: Mapped[datetime.datetime] = mapped_column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    # Define relationships for easier access through ORM
+    sender = relationship('User', foreign_keys=[sender_username], backref='sent_messages')
+    receiver = relationship('User', foreign_keys=[receiver_username], backref='received_messages')
+
 # model to store friends
 class Friend(Base):
     __tablename__ = "friends"
