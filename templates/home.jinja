@@ -134,13 +134,21 @@
     document.addEventListener('DOMContentLoaded', async () => {
         try {
             const keyPair = await window.crypto.subtle.generateKey(
-                { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+                {
+                    name: "RSA-OAEP",
+                    modulusLength: 2048,
+                    publicExponent: new Uint8Array([1, 0, 1]),
+                    hash: "SHA-256"
+                },
                 true,
                 ["encrypt", "decrypt"]
             );
             publicKey = keyPair.publicKey;
             privateKey = keyPair.privateKey;
-            // Assume there's a function to send the public key to the server
+
+            console.log("Public Key type:", publicKey.constructor.name); // Should be "CryptoKey"
+            console.log("Private Key type:", privateKey.constructor.name); // Should be "CryptoKey"
+
             await sendPublicKeyToServer(publicKey);
         } catch (err) {
             console.error("Key generation error:", err);
@@ -171,11 +179,34 @@
     // initializes the socket
     const socket = io();
 
-    // an incoming message arrives, we'll add the message to the message box
-    socket.on("incoming", async (msg) => {
-        const decryptedMessage = await decryptMessage(msg, privateKey);
-        add_message(decryptedMessage, "black");
-    });
+    function base64ToArrayBuffer(base64) {
+        const binaryString = window.atob(base64); // Decode base64 to string
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer; // Convert Uint8Array to ArrayBuffer
+    }
+
+    socket.on("incoming", async (data) => {
+    try {
+        if (data.encrypted) {
+            console.log('msg data was encrypted')
+            // Message is encrypted, decrypt it
+            const arrayBuffer = base64ToArrayBuffer(data.msg);
+            const decryptedMessage = await decryptMessage(arrayBuffer, privateKey);
+            add_message(decryptedMessage, "black");
+        } else {
+            // Message is not encrypted, display as is
+            add_message(data.msg, data.color);
+        }
+    } catch (error) {
+        console.error("Error handling incoming message:", error);
+    }
+});
+
+
     
     // we'll send the message to the server by emitting a "send" event
     async function send() {

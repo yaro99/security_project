@@ -29,7 +29,7 @@ app.serializer = URLSafeTimedSerializer(app.secret_key)
 # app.config['REMEMBER_COOKIE_SECURE'] = True
 # app.config['SESSION_COOKIE_HTTPONLY'] = True
 # app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-socketio = SocketIO(app)
+socketio = SocketIO(app, manage_session=False)
 
 # don't remove this!!
 import socket_routes
