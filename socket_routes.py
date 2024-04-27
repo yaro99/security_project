@@ -24,7 +24,6 @@ room = Room()
 
 @socketio.on("do_connection")
 def do_connection(enctext_connected):
-    print("in do connection")
     @copy_current_request_context
     def can_access_session():
         return session.get('user')
@@ -35,7 +34,6 @@ def do_connection(enctext_connected):
     room_id = request.cookies.get("room_id")
     if room_id:
         join_room(int(room_id))
-        print(f"enctext_connected: {enctext_connected}")
         emit("incoming", (enctext_connected, "green"), to=int(room_id))
     else:
         return

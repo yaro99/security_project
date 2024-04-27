@@ -61,7 +61,7 @@ def login():
 @app.route('/api/get_public_key')
 @login_required
 def get_public_key(ss_username):
-    username = request.args.get('username')
+    username = ss_username
     if not username:
         return jsonify({'error': 'Username is required'}), 400
     
@@ -187,6 +187,40 @@ def signup_user():
 def page_not_found(_):
     return render_template('404.jinja'), 404
 
+@app.route('/api/get_shared_key')
+@login_required
+def get_shared_key(ss_username):
+    # Get the friend's username from the request parameters
+    friend_username = request.args.get('friend_username')
+
+    if not friend_username:
+        return jsonify({'error': 'Friend username is required'}), 400
+
+    # Retrieve the shared key for this user and the friend from the database
+    shared_key_info = db.get_shared_key(ss_username, friend_username)
+
+    if shared_key_info:
+        # Send back the shared key encrypted for the user
+        return jsonify({
+            'key_sender_encrypted': shared_key_info.key_sender_encrypted,
+            'key_receiver_encrypted': shared_key_info.key_receiver_encrypted
+        })
+    else:
+        # If no key exists, it could be an error, or you may want to generate a new key here
+        return jsonify({'oops': 'Shared key not found'})
+
+
+@app.route('/api/save_shared_key', methods=['POST'])
+@login_required
+def api_save_shared_key(ss_username):
+    receiver_username = request.json.get('receiver_username')
+    key_sender_encrypted = request.json.get('key_sender_encrypted')
+    key_receiver_encrypted = request.json.get('key_receiver_encrypted')
+    print("saving shared key")
+
+    db.insert_shared_key(ss_username, receiver_username, key_sender_encrypted, key_receiver_encrypted)
+
+    return jsonify(success=True)
 
 
 # home page, where the messaging app is

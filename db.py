@@ -62,6 +62,49 @@ def insert_public_key(username, public_key):
         session.commit()
         return True, "Public key saved successfully."
     
+def insert_shared_key(sender_username, receiver_username, key_sender_encrypted, key_receiver_encrypted):
+    with Session(engine) as session:
+
+        # Check if there already exists a public key for the user
+        existing_key = session.query(SharedKey).filter(
+            SharedKey.sender_username == sender_username,
+            SharedKey.receiver_username == receiver_username
+        ).first()
+        if existing_key:
+            return False, "shared key already existed, cannot insert again"
+        else:
+            # If no shared key exists, create a new one
+            new_key = SharedKey(
+                sender_username=sender_username,
+                receiver_username=receiver_username,
+                key_sender_encrypted=key_sender_encrypted,
+                key_receiver_encrypted=key_receiver_encrypted,
+            )
+            session.add(new_key)
+            
+        session.commit()
+        return True, "Shared key saved successfully."
+    
+def get_shared_key(current_username, friend_username):
+    with Session(engine) as session:
+        # Query for a shared key entry where the current user is the sender or the receiver
+        shared_key = session.query(SharedKey).filter(
+            ((SharedKey.sender_username == current_username) & (SharedKey.receiver_username == friend_username)) |
+            ((SharedKey.sender_username == friend_username) & (SharedKey.receiver_username == current_username))
+        ).first()
+
+        if shared_key:
+            # If the current user is the sender, return the sender's encrypted key
+            if shared_key.sender_username == current_username:
+                return shared_key.key_sender_encrypted
+            # If the current user is the receiver, return the receiver's encrypted key
+            else:
+                return shared_key.key_receiver_encrypted
+        else:
+            # If no shared key is found, return None
+            return None
+
+    
 def insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted):
     with Session(engine) as session:
         new_message = Message(

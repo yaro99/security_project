@@ -208,6 +208,79 @@ async function sendPublicKeyToServer(publicKeyBase64) {
     }
 }
 
+//ATTN
+async function getOrGenerateSharedKey(receiver) {
+    // Check if the shared key already exists in local storage
+    let sharedKeyData = localStorage.getItem(receiver + "_sharedKey");
+    console.log("checking for shared key");
+    if (!sharedKeyData) {
+        // No shared key in localStorage, retrieve or generate a new one
+        console.log("waiting for api get shared key response");
+        const response = await axios.get('/api/get_shared_key', { params: { friend_username: receiver } });
+        if (response.data && response.data.key_sender_encrypted) {
+            // Shared key exists in the database
+            sharedKeyData = response.data.key_sender_encrypted;
+        } else {
+            // Generate a new shared key and save it to the database and local storage
+            console.log("going to generate new shared key and save it to db and locally");
+            // Before sending to the server:
+
+            let sharedKey = await generateSecureSharedKey();
+            let encryptedKeyForSender = await encryptAndSerializeKey(sharedKey, publicKey);
+            let encryptedKeyForReceiver = await encryptAndSerializeKey(sharedKey, receiverPublicKey);
+
+            await axios.post('/api/save_shared_key', {
+                receiver_username: receiver,
+                key_sender_encrypted: encryptedKeyForSender,
+                key_receiver_encrypted: encryptedKeyForReceiver
+            });
+            console.log("shared key is: " + sharedKey);
+            sharedKeyData = sharedKey;
+        }
+    }
+    return sharedKeyData;
+}
+
+async function generateSecureSharedKey() {
+    // Generate a symmetric key for AES-GCM
+    try {
+        const key = await window.crypto.subtle.generateKey(
+            {
+                name: "AES-GCM",
+                length: 256, // Can be 128, 192, or 256
+            },
+            true, // Whether the key is extractable (i.e., can be used in exportKey)
+            ["encrypt", "decrypt"] // Can be "encrypt", "decrypt", "wrapKey", or "unwrapKey"
+        );
+
+        // Export the key to a Uint8Array buffer
+        const exportedKey = await window.crypto.subtle.exportKey(
+            "raw", // raw format means as ArrayBuffer
+            key
+        );
+
+        // Convert the ArrayBuffer to a Base64 string to store it
+        const keyBase64 = arrayBufferToBase64(exportedKey);
+        return keyBase64;
+    } catch (e) {
+        console.error("Error generating a shared key:", e);
+        throw e; // Rethrow the error to be caught by the caller
+    }
+}
+
+
+async function encryptAndSerializeKey(key, publicKey) {
+    const encrypted = await window.crypto.subtle.encrypt(
+        { name: "RSA-OAEP" },
+        publicKey,
+        new TextEncoder().encode(key)
+    );
+    return arrayBufferToBase64(new Uint8Array(encrypted));
+}
+
+
+
+
 
     async function encryptMessage(message, publicKey) {
         try{
@@ -323,7 +396,12 @@ async function sendPublicKeyToServer(publicKeyBase64) {
         }
     });
 
-
+    async function generateMAC(data, key) {
+    const encoder = new TextEncoder();
+    const keyObj = await crypto.subtle.importKey("raw", base64ToArrayBuffer(key), { name: "HMAC", hash: { name: "SHA-256" } }, false, ["sign"]);
+    const signature = await crypto.subtle.sign("HMAC", keyObj, data);
+    return arrayBufferToBase64(signature);
+    }
 
     
     // we'll send the message to the server by emitting a "send" event
@@ -339,6 +417,8 @@ async function sendPublicKeyToServer(publicKeyBase64) {
     } 
 
     // we emit a join room event to the server to join a room
+
+
     async function join_room() {
        
         let receiver = $("#receiver").val();
@@ -386,6 +466,13 @@ async function sendPublicKeyToServer(publicKeyBase64) {
                 return;
             }
     }
+
+        try {
+            let sharedKeyData = await getOrGenerateSharedKey(receiver);
+            localStorage.setItem(receiver + "_sharedKey", sharedKeyData);
+        } catch (error) {
+            console.error("Error with shared key: ", error);
+        }
 
         // pass in the receiver of our message to the server
         // as well as the current user's username

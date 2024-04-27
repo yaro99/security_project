@@ -45,6 +45,17 @@ class PublicKey(Base):
     # Relationship to User
     user = relationship("User", back_populates="public_key")
 
+# model to store shared keys
+class SharedKey(Base):
+    __tablename__ = "shared_keys"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sender_username: Mapped[str] = mapped_column(String, ForeignKey('user.username'))
+    receiver_username: Mapped[str] = mapped_column(String, ForeignKey('user.username'))
+    key_sender_encrypted: Mapped[str] = mapped_column(String)
+    key_receiver_encrypted: Mapped[str] = mapped_column(String)
+    
+
 class Message(Base):
     __tablename__ = 'messages'
 
