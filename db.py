@@ -105,13 +105,14 @@ def get_shared_key(current_username, friend_username):
             return None
 
     
-def insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted):
+def insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, hmac):
     with Session(engine) as session:
         new_message = Message(
             sender_username=sender_username,
             receiver_username=receiver_username,
             message_sender_encrypted=message_sender_encrypted,
             message_receiver_encrypted=message_receiver_encrypted,
+            hmac=hmac,
             time_sent=datetime.now(ZoneInfo("Australia/Sydney"))
         )
         session.add(new_message)

@@ -52,18 +52,18 @@ def disconnect():
 
 # send message event handler
 @socketio.on("send")
-def send(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, room_id):
+def send(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, hmac, room_id):
 
     # print(f"sending msg from socket_routes.py: {message_sender_encrypted}")
     #emit("incoming", message_sender_encrypted, to=room_id)
-    emit("message_incoming", (sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted), to=room_id)
+    emit("message_incoming", (sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, hmac), to=room_id)
 
-    db.insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted)
+    db.insert_message(sender_username, receiver_username, message_sender_encrypted, message_receiver_encrypted, hmac)
 
 # join room event handler
 # sent when the user joins a room
 @socketio.on("join")
-def join(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_encrypted, joined_talking_to_sender_encrypted, joined_talking_to_receiver_encrypted):
+def join(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_encrypted, joined_talking_to_sender_encrypted, joined_talking_to_receiver_encrypted, joined_hmac, joined_talking_to_hmac):
     receiver = db.get_user(receiver_name)
     if receiver is None:
         return "Unknown receiver!"
@@ -83,18 +83,22 @@ def join(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_en
     messages = db.get_messages(sender_name, receiver_name)
     for message in messages:
         if message.sender_username == sender_name:
-            emit("incoming", (message.message_sender_encrypted, "gray"), to=room_id)
+            emit("incoming", (message.message_sender_encrypted, message.hmac, "gray"), to=room_id)
         elif message.receiver_username == sender_name:
-            emit("incoming", (message.message_receiver_encrypted, "gray"), useKey="recipient", to=room_id)
+            emit("incoming", (message.message_receiver_encrypted, message.hmac, "gray"), useKey="recipient", to=room_id)
     
-    emit("incoming", (joined_talking_to_sender_encrypted, "green"), to=room_id)
-    db.insert_message(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_encrypted)
+    emit("incoming", (joined_talking_to_sender_encrypted, joined_talking_to_hmac, "green"), to=room_id)
+    db.insert_message(sender_name, receiver_name, joined_sender_encrypted, joined_receiver_encrypted, joined_hmac)
     return room_id
 
 
 # leave room event handler
 @socketio.on("leave")
-def leave(username, enctext_leave, room_id):
-    emit("incoming", (enctext_leave, "red"), to=room_id)
+def leave(username, leave_sender_encrypted, leave_receiver_encrypted, leave_hmac, room_id):
+    emit("incoming", (leave_sender_encrypted, leave_hmac, "red"), to=room_id)
     leave_room(room_id)
     room.leave_room(username)
+
+@socketio.on("HMAC_failed")
+def hmac_failed():
+    print("Error: integrity of message could not be verified. Not displaying message.")

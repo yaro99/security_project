@@ -65,6 +65,7 @@ class Message(Base):
     receiver_username: Mapped[str] = mapped_column(String, ForeignKey('user.username'))
     message_sender_encrypted: Mapped[str] = mapped_column(String)
     message_receiver_encrypted: Mapped[str] = mapped_column(String)
+    hmac: Mapped[str] = mapped_column(String)
     time_sent: Mapped[datetime.datetime] = mapped_column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     # Define relationships for easier access through ORM
