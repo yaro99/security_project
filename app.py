@@ -197,13 +197,13 @@ def get_shared_key(ss_username):
         return jsonify({'error': 'Friend username is required'}), 400
 
     # Retrieve the shared key for this user and the friend from the database
+    # This picks automatically which encrypted key to return, based on current username
     shared_key_info = db.get_shared_key(ss_username, friend_username)
 
     if shared_key_info:
         # Send back the shared key encrypted for the user
         return jsonify({
-            'key_sender_encrypted': shared_key_info.key_sender_encrypted,
-            'key_receiver_encrypted': shared_key_info.key_receiver_encrypted
+            'sharedKey': shared_key_info
         })
     else:
         # If no key exists, it could be an error, or you may want to generate a new key here

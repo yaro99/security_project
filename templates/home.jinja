@@ -64,7 +64,7 @@
     let room_id = 0;
     let publicKeyReady = false;
     let receiverUsername = '';
-    let publicKey, privateKey, receiverPublicKey;
+    let publicKey, privateKey, receiverPublicKey, sharedKey;
 
     
 
@@ -211,34 +211,82 @@ async function sendPublicKeyToServer(publicKeyBase64) {
 //ATTN
 async function getOrGenerateSharedKey(receiver) {
     // Check if the shared key already exists in local storage
-    let sharedKeyData = localStorage.getItem(receiver + "_sharedKey");
-    console.log("checking for shared key");
-    if (!sharedKeyData) {
+    console.log("looking in localStorage for shared key");
+    let sharedKeyStoredString = localStorage.getItem(receiver + "_sharedKey");
+    
+    // Convert Base64 string to ArrayBuffer
+    const keyArrayBuffer = base64ToArrayBuffer(sharedKeyStoredString);
+
+    // Import the key to be used for crypto operations
+    try {
+        sharedKey = await window.crypto.subtle.importKey(
+            "raw", // Assuming the key was stored in raw format
+            keyArrayBuffer, // The ArrayBuffer containing the key data
+            {   // This is the algorithm details
+                name: "HMAC",
+                hash: { name: "SHA-256" }, // SHA-256 is commonly used
+            },
+            false, // Whether the key is extractable (i.e., can be exported)
+            ["sign", "verify"] // Permissions for this key
+        );
+        return;
+    } catch (error) {
+        console.error("Error importing the shared key:", error);
+        throw error;
+    }
+
+
+
+    if (!sharedKeyStoredString) {
         // No shared key in localStorage, retrieve or generate a new one
         console.log("waiting for api get shared key response");
         const response = await axios.get('/api/get_shared_key', { params: { friend_username: receiver } });
-        if (response.data && response.data.key_sender_encrypted) {
+        if (response.data && response.data.sharedKey) {
             // Shared key exists in the database
-            sharedKeyData = response.data.key_sender_encrypted;
+            var sharedKeyEncryptedString = response.data.sharedKey;
+            // now take encrypted string, decrypt using private key, and import as key object
+            var SharedKeyDecryptedString = decryptMessage(sharedKeyEncryptedString, privateKey);
+
+
+            // Convert Base64 string to ArrayBuffer
+            const keyArrayBuffer = base64ToArrayBuffer(SharedKeyDecryptedString);
+
+            // Import the key to be used for crypto operations
+            try {
+                sharedKey = await window.crypto.subtle.importKey(
+                    "raw", // Assuming the key was stored in raw format
+                    keyArrayBuffer, // The ArrayBuffer containing the key data
+                    {   // This is the algorithm details
+                        name: "HMAC",
+                        hash: { name: "SHA-256" }, // SHA-256 is commonly used
+                    },
+                    false, // Whether the key is extractable (i.e., can be exported)
+                    ["sign", "verify"] // Permissions for this key
+                );
+                return;
+            } catch (error) {
+                console.error("Error importing the shared key:", error);
+                throw error;
+            }
+            //ATTN HERE TURN STRING INTO KEY OBJECT
         } else {
             // Generate a new shared key and save it to the database and local storage
             console.log("going to generate new shared key and save it to db and locally");
             // Before sending to the server:
 
-            let sharedKey = await generateSecureSharedKey();
-            let encryptedKeyForSender = await encryptAndSerializeKey(sharedKey, publicKey);
-            let encryptedKeyForReceiver = await encryptAndSerializeKey(sharedKey, receiverPublicKey);
+            let sharedKeyString = await generateSecureSharedKey();
+            let encryptedKeyForSender = await encryptAndSerializeKey(sharedKeyString, publicKey);
+            let encryptedKeyForReceiver = await encryptAndSerializeKey(sharedKeyString, receiverPublicKey);
 
             await axios.post('/api/save_shared_key', {
                 receiver_username: receiver,
                 key_sender_encrypted: encryptedKeyForSender,
                 key_receiver_encrypted: encryptedKeyForReceiver
             });
-            console.log("shared key is: " + sharedKey);
-            sharedKeyData = sharedKey;
+            console.log("shared key is: " + sharedKeyString);
+            localStorage.setItem(receiver + "_sharedKey", sharedKeyString);
         }
     }
-    return sharedKeyData;
 }
 
 async function generateSecureSharedKey() {
@@ -252,6 +300,8 @@ async function generateSecureSharedKey() {
             true, // Whether the key is extractable (i.e., can be used in exportKey)
             ["encrypt", "decrypt"] // Can be "encrypt", "decrypt", "wrapKey", or "unwrapKey"
         );
+
+        sharedKey = key;
 
         // Export the key to a Uint8Array buffer
         const exportedKey = await window.crypto.subtle.exportKey(
@@ -468,8 +518,8 @@ async function encryptAndSerializeKey(key, publicKey) {
     }
 
         try {
-            let sharedKeyData = await getOrGenerateSharedKey(receiver);
-            localStorage.setItem(receiver + "_sharedKey", sharedKeyData);
+            await getOrGenerateSharedKey(receiver);
+            
         } catch (error) {
             console.error("Error with shared key: ", error);
         }
