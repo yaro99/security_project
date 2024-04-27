@@ -214,6 +214,7 @@ async function getOrGenerateSharedKey(receiver) {
     console.log("looking in localStorage for shared key");
     let sharedKeyStoredString = localStorage.getItem(receiver + "_sharedKey");
     
+    if(sharedKeyStoredString){
     // Convert Base64 string to ArrayBuffer
     const keyArrayBuffer = base64ToArrayBuffer(sharedKeyStoredString);
 
@@ -234,7 +235,7 @@ async function getOrGenerateSharedKey(receiver) {
         console.error("Error importing the shared key:", error);
         throw error;
     }
-
+    }
 
 
     if (!sharedKeyStoredString) {
@@ -243,13 +244,16 @@ async function getOrGenerateSharedKey(receiver) {
         const response = await axios.get('/api/get_shared_key', { params: { friend_username: receiver } });
         if (response.data && response.data.sharedKey) {
             // Shared key exists in the database
-            var sharedKeyEncryptedString = response.data.sharedKey;
-            // now take encrypted string, decrypt using private key, and import as key object
-            var SharedKeyDecryptedString = decryptMessage(sharedKeyEncryptedString, privateKey);
+            console.log("1");
+            var sharedKeyEncryptedArrayBuffer = base64ToArrayBuffer(response.data.sharedKey);
+            // now take encrypted array buffer, decrypt using private key, and import as key object
+            console.log("2");
+            var SharedKeyDecryptedString = await decryptMessage(sharedKeyEncryptedArrayBuffer, privateKey);
+            var SharedKeyDecryptedBase64 = stringToBase64(SharedKeyDecryptedString);
 
-
+            console.log("3");
             // Convert Base64 string to ArrayBuffer
-            const keyArrayBuffer = base64ToArrayBuffer(SharedKeyDecryptedString);
+            const keyArrayBuffer = base64ToArrayBuffer(SharedKeyDecryptedBase64);
 
             // Import the key to be used for crypto operations
             try {
@@ -263,12 +267,15 @@ async function getOrGenerateSharedKey(receiver) {
                     false, // Whether the key is extractable (i.e., can be exported)
                     ["sign", "verify"] // Permissions for this key
                 );
-                return;
+
             } catch (error) {
                 console.error("Error importing the shared key:", error);
                 throw error;
             }
-            //ATTN HERE TURN STRING INTO KEY OBJECT
+
+            localStorage.setItem(receiver + "_sharedKey", SharedKeyDecryptedString);
+            console.log("saved successfully imported sharedKey from db as string in localStorage");
+            return;
         } else {
             // Generate a new shared key and save it to the database and local storage
             console.log("going to generate new shared key and save it to db and locally");
@@ -288,6 +295,13 @@ async function getOrGenerateSharedKey(receiver) {
         }
     }
 }
+
+function stringToBase64(plainText) {
+    let uint8Array = new TextEncoder().encode(plainText);
+    let base64Encoded = btoa(String.fromCharCode.apply(null, uint8Array));
+    return base64Encoded;
+}
+
 
 async function generateSecureSharedKey() {
     // Generate a symmetric key for AES-GCM
